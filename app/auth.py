@@ -3,8 +3,9 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
+import os
 
-SECRET_KEY = "your-secret-key-keep-it-safe"
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-keep-it-safe")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
