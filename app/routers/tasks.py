@@ -31,7 +31,7 @@ async def create_task(task: TaskCreate, db: AsyncSession = Depends(get_db), curr
     await db.refresh(new_task)
 
     from app.tasks import process_task
-    process_task.delay(str(new_task.id), new_task.title, new_task.description)
+    process_task.delay(str(new_task.id), new_task.title, current_user.email)
 
     return new_task
 

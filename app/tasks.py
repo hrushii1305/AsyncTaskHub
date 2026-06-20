@@ -1,46 +1,47 @@
-import time
+import os
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from app.celery_app import celery
-import os
 
-EMAIL_HOST = "smtp.gmail.com"
-EMAIL_PORT = 587
-EMAIL_USER = os.getenv("EMAIL_USER")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 
-if not EMAIL_USER or not EMAIL_PASSWORD:
-    raise RuntimeError("EMAIL_USER and EMAIL_PASSWORD environment variables are not set!")
+@celery.task(name="app.tasks.process_task", bind=True, max_retries=3)
+def process_task(self, task_id: str, title: str, recipient_email: str):
+    """Send a notification email when a task is created."""
 
-@celery.task(name="app.tasks.process_task")
-def process_task(task_id: str, title: str = "", description: str = ""):
+    # ✅ Concept #2: credentials read INSIDE the function, not at module level
+    email_user = os.getenv("EMAIL_USER")
+    email_password = os.getenv("EMAIL_PASSWORD")
+
+    if not email_user or not email_password:
+        raise RuntimeError("EMAIL_USER and EMAIL_PASSWORD must be set")
+
+    # Build the email
+    msg = MIMEMultipart()
+    msg["From"] = email_user
+    msg["To"] = recipient_email          # ✅ Concept #1: the user's real email
+    msg["Subject"] = f"New Task: {title}"
+
+    body = f"""Hello,
+
+A new task has been created for you:
+
+  Task ID: {task_id}
+  Title: {title}
+
+Regards,
+AsyncTaskHub
+"""
+    msg.attach(MIMEText(body, "plain"))
+
     try:
-        msg = MIMEMultipart()
-        msg["From"] = EMAIL_USER
-        msg["To"] = description  # description contains the recipient email
-        msg["Subject"] = f"Task: {title}"
+        # ✅ Fix: port 465 with SMTP_SSL (Railway blocks port 587)
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as server:
+            server.login(email_user, email_password)
+            server.sendmail(email_user, recipient_email, msg.as_string())
 
-        body = f"""
-        Hello,
+        return f"Email sent successfully to {recipient_email}"
 
-        You have a new task assigned:
-
-        Task ID: {task_id}
-        Title: {title}
-
-        Regards,
-        AsyncTaskHub
-        """
-
-        msg.attach(MIMEText(body, "plain"))
-
-        with smtplib.SMTP(EMAIL_HOST, EMAIL_PORT) as server:
-            server.starttls()
-            server.login(EMAIL_USER, EMAIL_PASSWORD)
-            server.sendmail(EMAIL_USER, description, msg.as_string())
-
-        return f"Email sent successfully for task {task_id}"
-
-    except Exception as e:
-        return f"Failed to send email: {str(e)}"
+    except Exception as exc:
+        # ✅ Fix: raise (not return) so Celery sees a real failure, with auto-retry
+        raise self.retry(exc=exc, countdown=60)
