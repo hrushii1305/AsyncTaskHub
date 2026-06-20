@@ -24,5 +24,11 @@ jobs:
         pip install -r requirements.txt
 
     - name: Check app imports
+      env:
+        SECRET_KEY: ${{ secrets.SECRET_KEY }}
+        DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        EMAIL_USER: ${{ secrets.EMAIL_USER }}
+        EMAIL_PASSWORD: ${{ secrets.EMAIL_PASSWORD }}
       run: |
+        python -c "from app.main import app; print('App loaded successfully')"
         python -c "from app.main import app; print('App loaded successfully')"
