@@ -1,47 +1,35 @@
 import os
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+import resend
 from app.celery_app import celery
 
 
 @celery.task(name="app.tasks.process_task", bind=True, max_retries=3)
 def process_task(self, task_id: str, title: str, recipient_email: str):
-    """Send a notification email when a task is created."""
+    """Send a notification email via Resend's HTTP API."""
 
-    # ✅ Concept #2: credentials read INSIDE the function, not at module level
-    email_user = os.getenv("EMAIL_USER")
-    email_password = os.getenv("EMAIL_PASSWORD")
+    # Read API key inside the function (Concept #2: no module-level crash)
+    api_key = os.getenv("RESEND_API_KEY")
+    if not api_key:
+        raise RuntimeError("RESEND_API_KEY must be set")
 
-    if not email_user or not email_password:
-        raise RuntimeError("EMAIL_USER and EMAIL_PASSWORD must be set")
-
-    # Build the email
-    msg = MIMEMultipart()
-    msg["From"] = email_user
-    msg["To"] = recipient_email          # ✅ Concept #1: the user's real email
-    msg["Subject"] = f"New Task: {title}"
-
-    body = f"""Hello,
-
-A new task has been created for you:
-
-  Task ID: {task_id}
-  Title: {title}
-
-Regards,
-AsyncTaskHub
-"""
-    msg.attach(MIMEText(body, "plain"))
+    resend.api_key = api_key
 
     try:
-        # ✅ Fix: port 465 with SMTP_SSL (Railway blocks port 587)
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=30) as server:
-            server.login(email_user, email_password)
-            server.sendmail(email_user, recipient_email, msg.as_string())
-
+        resend.Emails.send({
+            "from": "onboarding@resend.dev",
+            "to": recipient_email,
+            "subject": f"New Task: {title}",
+            "html": f"""
+                <h2>New Task Created</h2>
+                <p>A new task has been created for you:</p>
+                <ul>
+                    <li><strong>Task ID:</strong> {task_id}</li>
+                    <li><strong>Title:</strong> {title}</li>
+                </ul>
+                <p>Regards,<br>AsyncTaskHub</p>
+            """
+        })
         return f"Email sent successfully to {recipient_email}"
 
     except Exception as exc:
-        # ✅ Fix: raise (not return) so Celery sees a real failure, with auto-retry
         raise self.retry(exc=exc, countdown=60)
