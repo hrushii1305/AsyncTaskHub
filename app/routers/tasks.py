@@ -24,6 +24,7 @@ async def create_task(task: TaskCreate, db: AsyncSession = Depends(get_db), curr
         user_id=current_user.id,
         title=task.title,
         description=task.description,
+        assigned_email=task.assigned_email,   # save the assignee email
         priority=task.priority
     )
     db.add(new_task)
@@ -31,10 +32,15 @@ async def create_task(task: TaskCreate, db: AsyncSession = Depends(get_db), curr
     await db.refresh(new_task)
 
     from app.tasks import process_task
+
+    # Email 1: notify the creator (always)
     process_task.delay(str(new_task.id), new_task.title, current_user.email)
 
-    return new_task
+    # Email 2: notify the assignee (only if one was provided)
+    if new_task.assigned_email:
+        process_task.delay(str(new_task.id), new_task.title, new_task.assigned_email)
 
+    return new_task
 @router.get("/", response_model=list[TaskResponse])
 async def get_tasks(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user_obj)):
     result = await db.execute(select(Task).where(Task.user_id == current_user.id))

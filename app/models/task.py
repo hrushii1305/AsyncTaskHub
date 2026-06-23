@@ -11,6 +11,7 @@ class Task(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     title = Column(String(255), nullable=False)
     description = Column(Text, nullable=True)
+    assigned_email = Column(String(300), nullable=True)
     status = Column(String(50), default="pending")
     priority = Column(String(20), default="medium")
     result = Column(Text, nullable=True)

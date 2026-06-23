@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from datetime import datetime
 from uuid import UUID
 from typing import Optional
@@ -6,6 +6,7 @@ from typing import Optional
 class TaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
+    assigned_email: Optional[EmailStr] = None
     priority: Optional[str] = "medium"
 
 class TaskUpdate(BaseModel):
@@ -19,6 +20,7 @@ class TaskResponse(BaseModel):
     user_id: UUID
     title: str
     description: Optional[str]
+    assigned_email: Optional[str]
     status: str
     priority: str
     result: Optional[str]
